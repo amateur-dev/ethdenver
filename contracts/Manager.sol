@@ -141,7 +141,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     // Main raffle data struct
     struct RaffleStruct {
         STATUS status; // status of the raffle. Can be created, accepted, ended, etc
-        uint256 maxEntries; // maximum number of entries allowed per user, to avoid abuse
+        uint256 maxEntries; // maximum number of entries
         address collateralAddress; // address of the NFT
         uint256 collateralId; // NFT id of the NFT
         address winner; // address of thed winner of the raffle. Address(0) if no winner yet
