@@ -120,7 +120,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         uint256 numEntries;
         uint256 price;
     }
-    mapping(uint256 => PriceStructure[5]) public prices;
+    mapping(uint256 => PriceStructure[1]) public prices;
 
     // Every raffle has a funding structure.
     struct FundingStructure {
@@ -153,6 +153,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         uint256 cancellingDate;
         address[] collectionWhitelist; // addresses of the required nfts. Will be empty if no NFT is required to buy
         ENTRY_TYPE entryType;
+        uint256 expiryTimeStamp;
     }
     // The main structure is an array of raffles
     RaffleStruct[] public raffles;
@@ -285,50 +286,58 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// sends an event when finished
     /// @return raffleId
     function createRaffle(
-        uint256 _desiredFundsInWeis,
-        uint256 _maxEntriesPerUser,
+        // uint256 _desiredFundsInWeis, //TODO to check is this restrictive
+        // uint256 _maxEntriesPerUser, 
         address _collateralAddress,
         uint256 _collateralId,
-        uint256 _minimumFundsInWeis,
+        // uint256 _minimumFundsInWeis,  //TODO what is the impact of this
+        uint256 _pricePerTicketInWeis,
         PriceStructure[] calldata _prices,
-        uint256 _commissionInBasicPoints,
-        address[] calldata _collectionWhitelist,
-        ENTRY_TYPE _entryType
-    ) external onlyRole(OPERATOR_ROLE) returns (uint256) {
+        // address[] calldata _collectionWhitelist,
+        // ENTRY_TYPE _entryType
+        address _raffleCreator, // TODO
+        uint256 _expiryTimeStamp // TODO
+    ) external returns (uint256) {
+        _minimumFundsInWeis = 1;  //TODO what is the impact of this
         require(_maxEntriesPerUser > 0, "maxEntries is 0");
         require(_collateralAddress != address(0), "NFT is null");
-        require(_commissionInBasicPoints <= 5000, "commission too high");
+        _commissionInBasicPoints = 500;
+        _collectionWhitelist = [];
+        // require(_commissionInBasicPoints <= 5000, "commission too high");
 
         RaffleStruct memory raffle = RaffleStruct({
             status: STATUS.CREATED,
-            maxEntries: _maxEntriesPerUser,
+            maxEntries: type(uint256).max,
             collateralAddress: _collateralAddress,
             collateralId: _collateralId,
             winner: address(0),
             randomNumber: 0,
             amountRaised: 0,
-            seller: address(0),
+            seller: _raffleCreator, // _raffleCreator // TODO: to check the impact of this.  Should not this be the address of the msg.sender?
             platformPercentage: _commissionInBasicPoints,
             entriesLength: 0,
             cancellingDate: 0,
             collectionWhitelist: _collectionWhitelist,
-            entryType: _entryType
+            entryType: MIXED,
+            expiryTimeStamp: _expiryTimeStamp
         });
 
         raffles.push(raffle);
 
-        require(_prices.length > 0, "No prices");
-
-        for (uint256 i = 0; i < _prices.length; i++) {
-            require(_prices[i].numEntries > 0, "numEntries is 0");
-
-            PriceStructure memory p = PriceStructure({
+        require(_prices.length == 1, "Issue in the prices");
+        _prices[i].numEntries = type(uint256).max;
+        PriceStructure memory p = PriceStructure({
                 id: _prices[i].id,
                 numEntries: _prices[i].numEntries,
-                price: _prices[i].price
+                price: _pricePerTicketInWeis
             });
 
             prices[raffles.length - 1][i] = p;
+
+        for (uint256 i = 0; i < _prices.length; i++) {
+            
+
+            
         }
 
         fundingList[raffles.length - 1] = FundingStructure({
