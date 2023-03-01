@@ -380,7 +380,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @param _raffleId Id of the raffle
     /// @notice The owner of the NFT can stake it on the raffle. At this moment the raffle starts and can sell entries to players
     /// @dev the owner must have approved this contract before. Otherwise will revert when transferring from the owner
-    function stakeNFT(uint256 _raffleId) external {
+    function stakeNFT(uint256 _raffleId) internal {
         RaffleStruct storage raffle = raffles[_raffleId];
         // Check if the raffle is already created
         require(raffle.status == STATUS.CREATED, "Raffle not CREATED");
@@ -392,7 +392,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         );
 
         raffle.status = STATUS.ACCEPTED;
-        raffle.seller = msg.sender;
+        // raffle.seller = msg.sender;
 
         // transfer the asset to the contract
         //  IERC721 _asset = IERC721(raffle.collateralAddress);
