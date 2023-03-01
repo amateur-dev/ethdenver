@@ -125,7 +125,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     // Every raffle has a funding structure.
     struct FundingStructure {
         uint256 minimumFundsInWeis;
-        uint256 desiredFundsInWeis;
+        // uint256 desiredFundsInWeis;
     }
     mapping(uint256 => FundingStructure) public fundingList;
 
@@ -298,11 +298,12 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         address _raffleCreator, // TODO
         uint256 _expiryTimeStamp // TODO
     ) external returns (uint256) {
-        _minimumFundsInWeis = 1;  //TODO what is the impact of this
-        require(_maxEntriesPerUser > 0, "maxEntries is 0");
+        uint256 _minimumFundsInWeis = 1;  //TODO what is the impact of this
+        uint _maxEntriesPerUser = type(uint256).max;
         require(_collateralAddress != address(0), "NFT is null");
-        _commissionInBasicPoints = 500;
-        _collectionWhitelist = [];
+        uint _commissionInBasicPoints = 500;
+        // _collectionWhitelist empty
+        address[] memory _collectionWhitelist = new address[](1);
         // require(_commissionInBasicPoints <= 5000, "commission too high");
 
         RaffleStruct memory raffle = RaffleStruct({
@@ -318,31 +319,24 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             entriesLength: 0,
             cancellingDate: 0,
             collectionWhitelist: _collectionWhitelist,
-            entryType: MIXED,
+            entryType: ENTRY_TYPE.MIXED,
             expiryTimeStamp: _expiryTimeStamp
         });
 
         raffles.push(raffle);
 
         require(_prices.length == 1, "Issue in the prices");
-        _prices[i].numEntries = type(uint256).max;
+        _prices[0].numEntries = type(uint256).max;
         PriceStructure memory p = PriceStructure({
-                id: _prices[i].id,
-                numEntries: _prices[i].numEntries,
+                id: _prices[0].id,
+                numEntries: _prices[0].numEntries,
                 price: _pricePerTicketInWeis
             });
 
-            prices[raffles.length - 1][i] = p;
-
-        for (uint256 i = 0; i < _prices.length; i++) {
-            
-
-            
-        }
+            prices[raffles.length - 1][0] = p; //TODO: to check the impact of this line of code
 
         fundingList[raffles.length - 1] = FundingStructure({
-            minimumFundsInWeis: _minimumFundsInWeis,
-            desiredFundsInWeis: _desiredFundsInWeis
+            minimumFundsInWeis: _minimumFundsInWeis
         });
 
         emit RaffleCreated(
