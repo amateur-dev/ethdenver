@@ -326,10 +326,9 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         raffles.push(raffle);
 
         require(_prices.length == 1, "Issue in the prices");
-        _prices[0].numEntries = type(uint256).max;
         PriceStructure memory p = PriceStructure({
                 id: _prices[0].id,
-                numEntries: _prices[0].numEntries,
+                numEntries: type(uint256).max,
                 price: _pricePerTicketInWeis
             });
 
