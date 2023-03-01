@@ -287,7 +287,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @return raffleId
     function createRaffle(
         // uint256 _desiredFundsInWeis, //TODO to check is this restrictive
-        // uint256 _maxEntriesPerUser, 
+        uint256 _maxEntries, 
         address _collateralAddress,
         uint256 _collateralId,
         // uint256 _minimumFundsInWeis,  //TODO what is the impact of this
@@ -299,7 +299,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         uint256 _expiryTimeStamp // TODO
     ) external returns (uint256) {
         uint256 _minimumFundsInWeis = 1;  //TODO what is the impact of this
-        uint _maxEntriesPerUser = type(uint256).max;
+        // uint _maxEntriesPerUser = type(uint256).max;
         require(_collateralAddress != address(0), "NFT is null");
         uint _commissionInBasicPoints = 500;
         // _collectionWhitelist empty
@@ -308,7 +308,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
 
         RaffleStruct memory raffle = RaffleStruct({
             status: STATUS.CREATED,
-            maxEntries: type(uint256).max,
+            maxEntries: _maxEntries,
             collateralAddress: _collateralAddress,
             collateralId: _collateralId,
             winner: address(0),
@@ -344,7 +344,8 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             _collateralId
         );
 
-        return raffles.length - 1;
+        uint raffleID = raffles.length - 1;
+        stakeNFT(raffleID);
     }
 
     /* * Example of a price structure:
