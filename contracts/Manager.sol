@@ -76,8 +76,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     event EntrySold(
         uint256 indexed raffleId,
         address indexed buyer,
-        uint256 currentSize,
-        uint256 priceStructureId
+        uint256 currentSize
     );
     // Event sent when a free entry is added by the operator
     event FreeEntry(
@@ -273,11 +272,11 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
 
     //////////////////////////////////////////////
 
-    /// @param _desiredFundsInWeis the amount the seller would like to get from the raffle
-    /// @param _maxEntriesPerUser To avoid whales, the number of entries an user can have is limited
+    // _desiredFundsInWeis this has been removed by Dipesh
+    // _maxEntriesPerUser this has been removed by Dipesh
     /// @param _collateralAddress The address of the NFT of the raffle
     /// @param _collateralId The id of the NFT (ERC721)
-    /// @param _minimumFundsInWeis The mininum amount required for the raffle to set a winner
+    //  _minimumFundsInWeis this has been removed by Dipesh
     /// @param _prices Array of prices and amount of entries the customer could purchase
     /// @param _commissionInBasicPoints commission for the platform, in basic points
     /// @param _collectionWhitelist array with the required collections to participate in the raffle. Empty if there is no collection
@@ -328,23 +327,22 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         require(_prices.length == 1, "Issue in the prices");
         PriceStructure memory p = PriceStructure({
                 id: _prices[0].id,
-                numEntries: type(uint256).max,
+                numEntries: _maxEntries,
                 price: _pricePerTicketInWeis
             });
+        uint raffleID = raffles.length - 1;
+        prices[raffleID][0] = p; //TODO: to check the impact of this line of code
 
-            prices[raffles.length - 1][0] = p; //TODO: to check the impact of this line of code
-
-        fundingList[raffles.length - 1] = FundingStructure({
+        fundingList[raffleID] = FundingStructure({
             minimumFundsInWeis: _minimumFundsInWeis
         });
 
         emit RaffleCreated(
-            raffles.length - 1,
+            raffleID,
             _collateralAddress,
             _collateralId
         );
 
-        uint raffleID = raffles.length - 1;
         stakeNFT(raffleID);
     }
 
@@ -408,14 +406,10 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @notice If the operator set requiredNFTs when creating the raffle, only the owners of nft on that collection can make a call to this method. This will be
     /// used for special raffles
     /// @param _raffleId: id of the raffle
-    /// @param _id: id of the price structure
-    /// @param _collection: collection of the tokenId used. Not used if there is no required nft on the raffle
-    /// @param _tokenIdUsed: id of the token used in private raffles (to avoid abuse can not be reused on the same raffle)
+    /// @param _numberOfTickets: number of tickets the user wants to buy
     function buyEntry(
         uint256 _raffleId,
-        uint256 _id,
-        address _collection,
-        uint256 _tokenIdUsed
+        uint256 _numberOfTickets
     ) external payable nonReentrant {
         RaffleStruct storage raffle = raffles[_raffleId];
         require(raffle.seller != msg.sender, "Seller cannot buy");
@@ -429,60 +423,60 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             "Blacklisted!"
         );
         // if the raffle requires an nft
-        if (raffle.collectionWhitelist.length > 0) {
-            bool hasRequiredCollection = false;
-            for (
-                uint256 i = 0;
-                i < raffle.collectionWhitelist.length;
-                i++
-            ) {
-                if (raffle.collectionWhitelist[i] == _collection) {
-                    hasRequiredCollection = true;
-                    break;
-                }
-            }
-            require(
-                hasRequiredCollection == true,
-                "Not in required collection"
-            );
-            IERC721 requiredNFT = IERC721(_collection);
-            require(
-                requiredNFT.ownerOf(_tokenIdUsed) == msg.sender,
-                "Not the owner of tokenId"
-            );
-            bytes32 hashRequiredNFT = keccak256(
-                abi.encode(_collection, _raffleId, _tokenIdUsed)
-            );
-            // check the tokenId has not been using yet in the raffle, to avoid abuse
-            if (requiredNFTWallets[hashRequiredNFT] == address(0)) {
-                requiredNFTWallets[hashRequiredNFT] = msg.sender;
-            } else
-                require(
-                    requiredNFTWallets[hashRequiredNFT] == msg.sender,
-                    "tokenId used"
-                );
-        }
+        // if (raffle.collectionWhitelist.length > 0) {
+        //     bool hasRequiredCollection = false;
+        //     for (
+        //         uint256 i = 0;
+        //         i < raffle.collectionWhitelist.length;
+        //         i++
+        //     ) {
+        //         if (raffle.collectionWhitelist[i] == _collection) {
+        //             hasRequiredCollection = true;
+        //             break;
+        //         }
+        //     }
+        //     require(
+        //         hasRequiredCollection == true,
+        //         "Not in required collection"
+        //     );
+        //     IERC721 requiredNFT = IERC721(_collection);
+        //     require(
+        //         requiredNFT.ownerOf(_tokenIdUsed) == msg.sender,
+        //         "Not the owner of tokenId"
+        //     );
+        //     bytes32 hashRequiredNFT = keccak256(
+        //         abi.encode(_collection, _raffleId, _tokenIdUsed)
+        //     );
+        //     // check the tokenId has not been using yet in the raffle, to avoid abuse
+        //     if (requiredNFTWallets[hashRequiredNFT] == address(0)) {
+        //         requiredNFTWallets[hashRequiredNFT] = msg.sender;
+        //     } else
+        //         require(
+        //             requiredNFTWallets[hashRequiredNFT] == msg.sender,
+        //             "tokenId used"
+        //         );
+        // }
 
         require(msg.sender != address(0), "msg.sender is null"); // 37
-        require(_id > 0, "howMany is 0");
         require(
             raffle.status == STATUS.ACCEPTED,
             "Raffle is not in accepted"
         ); // 1808
-        PriceStructure memory priceStruct = getPriceStructForId(_raffleId, _id);
-        require(priceStruct.numEntries > 0, "id not supported");
+        PriceStructure memory priceStruct = getPriceStructForId(_raffleId); //TODO: to fix getPriceStructForId cause I removed the id for the prices
+        require(priceStruct.numEntries > 0, "priceStruct.numEntries");
+        require(_numberOfTickets <= priceStruct.numEntries, "buying more than the maximum tickets");
         require(
-            msg.value == priceStruct.price,
-            "msg.value must be equal to the price"
-        ); // 1722
-
-        bytes32 hash = keccak256(abi.encode(msg.sender, _raffleId));
-        // check there are enough entries left for this particular user
-        require(
-            claimsData[hash].numEntriesPerUser + priceStruct.numEntries <=
-                raffle.maxEntries,
-            "Bought too many entries"
+            msg.value == _numberOfTickets * priceStruct.price,  //TODO to confirm we are good over here
+            "msg.value must be equal to the price * number of tickets"
         );
+
+        bytes32 hash = keccak256(abi.encode(msg.sender, _raffleId)); // to check if this hash is being used anywhere else other than calculating the max enteries per user
+        // // check there are enough entries left for this particular user
+        // require(
+        //     claimsData[hash].numEntriesPerUser + priceStruct.numEntries <=
+        //         raffle.maxEntries,
+        //     "Bought too many entries"
+        // );
 
         EntriesBought memory entryBought = EntriesBought({
             player: msg.sender,
@@ -497,14 +491,13 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             raffle.entriesLength +
             priceStruct.numEntries;
         //update claim data
-        claimsData[hash].numEntriesPerUser += priceStruct.numEntries;
+        claimsData[hash].numEntriesPerUser += priceStruct.numEntries; //TODO to confirm this does not have a negative impact 
         claimsData[hash].amountSpentInWeis += msg.value;
 
         emit EntrySold(
             _raffleId,
             msg.sender,
             raffle.entriesLength,
-            _id
         ); // 2377
     }
 
