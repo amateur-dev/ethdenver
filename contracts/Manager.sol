@@ -189,7 +189,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             _linkToken // LINK Token
         )
     {
-        _setupRole(OPERATOR_ROLE, 0x13503B622abC0bD30A7e9687057DF6E8c42Fb928);
+        _setupRole(OPERATOR_ROLE, 0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF); 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
         keyHash = _keyHash;
@@ -324,30 +324,10 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         );
 
         stakeNFT(raffleID);
+        return raffleID;
+    }
     
 
-    /* * Example of a price structure:
-
-    /// @param _idRaffle raffleId
-    /// _id Id Removed by Dipesh
-    /// @return the price structure of that particular Id + raffle
-    /// @dev Returns the price structure, used in the frontend
-    function getPriceStructForId(uint256 _idRaffle)
-        internal
-        view
-        returns (PriceStructure memory)
-    {
-        return prices[_idRaffle][0];
-    }
-
-    /*
-    Callable only by the owner of the NFT
-    Once the operator has created the raffle, he can stake the NFT
-    At this moment, the NFT is locked and the players can buy entries
-    */
-    /// @param _raffleId Id of the raffle
-    /// @notice The owner of the NFT can stake it on the raffle. At this moment the raffle starts and can sell entries to players
-    /// @dev the owner must have approved this contract before. Otherwise will revert when transferring from the owner
     function stakeNFT(uint256 _raffleId) internal {
         RaffleStruct storage raffle = raffles[_raffleId];
         // Check if the raffle is already created
@@ -432,7 +412,8 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             raffle.status == STATUS.ACCEPTED,
             "Raffle is not in accepted"
         ); // 1808
-        PriceStructure memory priceStruct = getPriceStructForId(_raffleId); //TODO: to fix getPriceStructForId cause I removed the id for the prices
+        PriceStructure memory priceStruct = getPriceStructForId(_raffleId); 
+        //TODO: to fix getPriceStructForId cause I removed the id for the prices
         require(priceStruct.numEntries > 0, "priceStruct.numEntries");
         require(_numberOfTickets <= priceStruct.numEntries, "buying more than the maximum tickets");
         require(
@@ -471,58 +452,67 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         ); // 2377
     }
 
-
-    // The operator can add free entries to the raffle
-    /// @param _raffleId Id of the raffle
-    /// @param _freePlayers array of addresses corresponding to the wallet of the users that won a free entrie
-    /// @dev only operator can make this call. Assigns a single entry per user, except if that user already reached the max limit of entries per user
-    function giveBatchEntriesForFree(
-        uint256 _raffleId,
-        address[] memory _freePlayers
-    ) external nonReentrant onlyRole(OPERATOR_ROLE) {
-        require(
-            raffles[_raffleId].status == STATUS.ACCEPTED,
-            "Raffle is not in accepted"
-        );
-
-        uint256 freePlayersLength = _freePlayers.length;
-        uint256 validPlayersCount = 0;
-        for (uint256 i = 0; i < freePlayersLength; i++) {
-            address entry = _freePlayers[i];
-            if (
-                claimsData[keccak256(abi.encode(entry, _raffleId))]
-                    .numEntriesPerUser +
-                    1 <=
-                raffles[_raffleId].maxEntries
-            ) {
-                // add a new element to the entriesBought array.
-                // as this method only adds 1 entry per call, the amountbought is always 1
-                EntriesBought memory entryBought = EntriesBought({
-                    player: entry,
-                    currentEntriesLength: raffles[_raffleId].entriesLength +
-                        i +
-                        1
-                });
-                entriesList[_raffleId].push(entryBought);
-
-                claimsData[keccak256(abi.encode(entry, _raffleId))]
-                    .numEntriesPerUser++;
-
-                ++validPlayersCount;
-            }
-        }
-
-        raffles[_raffleId].entriesLength =
-            raffles[_raffleId].entriesLength +
-            validPlayersCount;
-
-        emit FreeEntry(
-            _raffleId,
-            _freePlayers,
-            freePlayersLength,
-            raffles[_raffleId].entriesLength
-        );
+    function getPriceStructForId(uint256 _idRaffle)
+        internal
+        view
+        returns (PriceStructure memory)
+    {
+        return prices[_idRaffle][0];
+        // return PriceStructure({id: 0, numEntries: 0, price: 0});
     }
+
+
+    // // The operator can add free entries to the raffle
+    // /// @param _raffleId Id of the raffle
+    // /// @param _freePlayers array of addresses corresponding to the wallet of the users that won a free entrie
+    // /// @dev only operator can make this call. Assigns a single entry per user, except if that user already reached the max limit of entries per user
+    // function giveBatchEntriesForFree(
+    //     uint256 _raffleId,
+    //     address[] memory _freePlayers
+    // ) external nonReentrant onlyRole(OPERATOR_ROLE) {
+    //     require(
+    //         raffles[_raffleId].status == STATUS.ACCEPTED,
+    //         "Raffle is not in accepted"
+    //     );
+
+    //     uint256 freePlayersLength = _freePlayers.length;
+    //     uint256 validPlayersCount = 0;
+    //     for (uint256 i = 0; i < freePlayersLength; i++) {
+    //         address entry = _freePlayers[i];
+    //         if (
+    //             claimsData[keccak256(abi.encode(entry, _raffleId))]
+    //                 .numEntriesPerUser +
+    //                 1 <=
+    //             raffles[_raffleId].maxEntries
+    //         ) {
+    //             // add a new element to the entriesBought array.
+    //             // as this method only adds 1 entry per call, the amountbought is always 1
+    //             EntriesBought memory entryBought = EntriesBought({
+    //                 player: entry,
+    //                 currentEntriesLength: raffles[_raffleId].entriesLength +
+    //                     i +
+    //                     1
+    //             });
+    //             entriesList[_raffleId].push(entryBought);
+
+    //             claimsData[keccak256(abi.encode(entry, _raffleId))]
+    //                 .numEntriesPerUser++;
+
+    //             ++validPlayersCount;
+    //         }
+    //     }
+
+    //     raffles[_raffleId].entriesLength =
+    //         raffles[_raffleId].entriesLength +
+    //         validPlayersCount;
+
+    //     emit FreeEntry(
+    //         _raffleId,
+    //         _freePlayers,
+    //         freePlayersLength,
+    //         raffles[_raffleId].entriesLength
+    //     );
+    // }
 
     // helper method to get the winner address of a raffle
     /// @param _raffleId Id of the raffle
@@ -647,9 +637,6 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     }
 
     // can be called by the seller at every moment once enough funds has been raised
-    /// @param _raffleId Id of the raffle
-    /// @notice the seller of the nft, if the minimum amount has been reached, can call an early cashout, finishing the raffle
-    /// @dev it triggers Chainlink VRF1 consumer, and generates a random number that is normalized and checked that corresponds to a MW player
     // function earlyCashOut(uint256 _raffleId) external {
     //     RaffleStruct storage raffle = raffles[_raffleId];
     //     FundingStructure memory funding = fundingList[_raffleId];
@@ -675,15 +662,16 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @param _raffleId Id of the raffle
     /// @notice the operator finish the raffle, if the desired funds has been reached
     /// @dev it triggers Chainlink VRF1 consumer, and generates a random number that is normalized and checked that corresponds to a MW player
+
     // function setWinner(uint256 _raffleId)
     //     external
     //     nonReentrant
-    //     onlyRole(OPERATOR_ROLE)
     // {
-    //     RaffleStruct storage raffle = raffles[_raffleId];
+        // RaffleStruct storage raffle = raffles[_raffleId];
     //     FundingStructure storage funding = fundingList[_raffleId];
     //     // Check if the raffle is already accepted or is called again because early cashout failed
-    //     require(raffle.status == STATUS.ACCEPTED, "Raffle in wrong status");
+        // require(raffle.status == STATUS.ACCEPTED, "Raffle in wrong status");
+        // require(raffle.)
     //     require(
     //         raffle.amountRaised >= funding.minimumFundsInWeis,
     //         "Not enough funds raised"
@@ -778,6 +766,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     // /// @param _raffleId Id of the raffle
     // /// @dev after 30 days after cancelling passes, the operator can transfer to
     // /// destinationWallet the remaining funds
+    //TODO: to evaluate what this is
     // function transferRemainingFunds(uint256 _raffleId)
     //     external
     //     nonReentrant
