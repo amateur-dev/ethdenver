@@ -521,6 +521,10 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @dev Uses a binary search on the sorted array to retreive the winner
     /// but if the winner candidate is blacklisted, loop through the left looking for
     /// a candidate not blacklisted
+    // TODO check who is expected to call this function
+    // TODO why is this function public
+    // TODO where to get this from _normalizedRandomNumber
+
     function getWinnerAddressFromRandom(
         uint256 _raffleId,
         uint256 _normalizedRandomNumber
@@ -663,31 +667,30 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @notice the operator finish the raffle, if the desired funds has been reached
     /// @dev it triggers Chainlink VRF1 consumer, and generates a random number that is normalized and checked that corresponds to a MW player
 
-    // function setWinner(uint256 _raffleId)
-    //     external
-    //     nonReentrant
-    // {
-        // RaffleStruct storage raffle = raffles[_raffleId];
-    //     FundingStructure storage funding = fundingList[_raffleId];
+    function setWinner(uint256 _raffleId)
+        external
+        nonReentrant
+    {
+        RaffleStruct storage raffle = raffles[_raffleId];
+        FundingStructure storage funding = fundingList[_raffleId];
     //     // Check if the raffle is already accepted or is called again because early cashout failed
-        // require(raffle.status == STATUS.ACCEPTED, "Raffle in wrong status");
-        // require(raffle.)
-    //     require(
-    //         raffle.amountRaised >= funding.minimumFundsInWeis,
-    //         "Not enough funds raised"
-    //     );
+        require(raffle.status == STATUS.ACCEPTED, "Raffle in wrong status");
+        require(
+            raffle.amountRaised >= funding.minimumFundsInWeis,
+            "Not enough funds raised"
+        );
 
-    //     require(
-    //         funding.desiredFundsInWeis <= raffle.amountRaised,
-    //         "Desired funds not raised"
-    //     );
-    //     raffle.status = STATUS.CLOSING_REQUESTED;
+        // require(
+        //     funding.desiredFundsInWeis <= raffle.amountRaised,
+        //     "Desired funds not raised"
+        // );
+        raffle.status = STATUS.CLOSING_REQUESTED;
 
     //     // this call trigers the VRF v1 process from Chainlink
-    //     getRandomNumber(_raffleId, raffle.entriesLength);
+        getRandomNumber(_raffleId, raffle.entriesLength);
 
-    //     emit SetWinnerTriggered(_raffleId, raffle.amountRaised);
-    // }
+        emit SetWinnerTriggered(_raffleId, raffle.amountRaised);
+    }
 
     // /// @param _newAddress new address of the platform
     // /// @dev Change the wallet of the platform. The one that will receive the platform fee when the raffle is closed.
