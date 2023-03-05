@@ -462,7 +462,8 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         internal
         view
         returns (PriceStructure memory)
-    {
+    {   
+        console.log("we are trying to fetch the prices");
         return prices[_idRaffle][0];
         // return PriceStructure({id: 0, numEntries: 0, price: 0});
     }
