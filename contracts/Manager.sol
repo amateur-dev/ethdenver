@@ -8,6 +8,7 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./BlackListManager.sol";
+import "hardhat/console.sol";
 
 contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     ////////// CHAINLINK VRF v1 /////////////////
@@ -413,6 +414,8 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             "Raffle is not in accepted"
         ); // 1808
         PriceStructure memory priceStruct = getPriceStructForId(_raffleId); 
+        console.log(priceStruct.numEntries, "numEntries");
+        console.log(_numberOfTickets, "numEntries");
         //TODO: to fix getPriceStructForId cause I removed the id for the prices
         require(priceStruct.numEntries > 0, "priceStruct.numEntries");
         require(_numberOfTickets <= priceStruct.numEntries, "buying more than the maximum tickets");
@@ -422,6 +425,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         );
 
         bytes32 hash = keccak256(abi.encode(msg.sender, _raffleId)); // to check if this hash is being used anywhere else other than calculating the max enteries per user
+        console.log("hash", hash);
         // // check there are enough entries left for this particular user
         // require(
         //     claimsData[hash].numEntriesPerUser + priceStruct.numEntries <=
