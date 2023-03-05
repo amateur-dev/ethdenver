@@ -425,7 +425,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         );
 
         bytes32 hash = keccak256(abi.encode(msg.sender, _raffleId)); // to check if this hash is being used anywhere else other than calculating the max enteries per user
-        console.log("hash", hash);
+        console.log("we got the hash");
         // // check there are enough entries left for this particular user
         // require(
         //     claimsData[hash].numEntriesPerUser + priceStruct.numEntries <=
@@ -438,7 +438,9 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             currentEntriesLength: raffle.entriesLength +
                 priceStruct.numEntries
         });
+        console.log("we got the event entryBought");
         entriesList[_raffleId].push(entryBought);
+        console.log("we pushed the object");
 
         raffle.amountRaised += msg.value; // 6917 gas
         // update the field entriesLength, used in frontend to avoid making extra calls
