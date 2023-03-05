@@ -362,17 +362,19 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         uint256 _raffleId,
         uint256 _numberOfTickets
     ) external payable nonReentrant {
+        console.log("we are starting this");
         RaffleStruct storage raffle = raffles[_raffleId];
+        console.log(raffle.seller, "raffle.seller");
         require(raffle.seller != msg.sender, "Seller cannot buy");
-        require(
-            raffle.entryType == ENTRY_TYPE.MIXED || 
-            raffle.entryType == ENTRY_TYPE.ONLY_DIRECTLY,
-            "Entry type not allowed"
-        ); 
-        require(
-            blackListManager.isBlackListed(msg.sender) == false,
-            "Blacklisted!"
-        );
+        // require(
+        //     raffle.entryType == ENTRY_TYPE.MIXED || 
+        //     raffle.entryType == ENTRY_TYPE.ONLY_DIRECTLY,
+        //     "Entry type not allowed"
+        // ); 
+        // require(
+        //     blackListManager.isBlackListed(msg.sender) == false,
+        //     "Blacklisted!"
+        // );
         // if the raffle requires an nft
         // if (raffle.collectionWhitelist.length > 0) {
         //     bool hasRequiredCollection = false;
@@ -407,12 +409,14 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         //             "tokenId used"
         //         );
         // }
-
         require(msg.sender != address(0), "msg.sender is null"); // 37
+        console.log("We checked the add 0");
         require(
             raffle.status == STATUS.ACCEPTED,
             "Raffle is not in accepted"
         ); // 1808
+        console.log("raffle.status is accepted");
+        console.log("getting the priceStruct");
         PriceStructure memory priceStruct = getPriceStructForId(_raffleId); 
         console.log(priceStruct.numEntries, "numEntries");
         console.log(_numberOfTickets, "numEntries");
