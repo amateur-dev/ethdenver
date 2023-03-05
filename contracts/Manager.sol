@@ -179,7 +179,6 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     BlackListManager blackListManager;
 
     constructor(
-        address _blacklistManager,
         address _vrfCoordinator,
         address _linkToken,
         bytes32 _keyHash,
@@ -190,15 +189,13 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             _linkToken // LINK Token
         )
     {
-        _setupRole(OPERATOR_ROLE, 0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF); 
+        _setupRole(OPERATOR_ROLE, msg.sender); 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
         keyHash = _keyHash;
         if (_mainetFee == true)
             fee = 2 * 10**18; // in mainnet, the fee must be 2 LINK
         else fee = 0.1 * 10**18; // 0.1 LINK In Rinkeby and Goerli
-
-        blackListManager = BlackListManager(_blacklistManager);
     }
 
     /// @dev this is the method that will be called by the smart contract to get a random number
