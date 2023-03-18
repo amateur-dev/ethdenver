@@ -8,7 +8,6 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./BlackListManager.sol";
-import "hardhat/console.sol";
 
 contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     ////////// CHAINLINK VRF v1 /////////////////
@@ -359,9 +358,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         uint256 _raffleId,
         uint256 _numberOfTickets
     ) external payable nonReentrant {
-        console.log("we are starting this");
         RaffleStruct storage raffle = raffles[_raffleId];
-        console.log(raffle.seller, "raffle.seller");
         require(raffle.seller != msg.sender, "Seller cannot buy");
         // require(
         //     raffle.entryType == ENTRY_TYPE.MIXED || 
@@ -407,16 +404,11 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         //         );
         // }
         require(msg.sender != address(0), "msg.sender is null"); // 37
-        console.log("We checked the add 0");
         require(
             raffle.status == STATUS.ACCEPTED,
             "Raffle is not in accepted"
         ); // 1808
-        console.log("raffle.status is accepted");
-        console.log("getting the priceStruct");
         PriceStructure memory priceStruct = getPriceStructForId(_raffleId); 
-        console.log(priceStruct.numEntries, "numEntries");
-        console.log(_numberOfTickets, "numEntries");
         //TODO: to fix getPriceStructForId cause I removed the id for the prices
         require(priceStruct.numEntries > 0, "priceStruct.numEntries");
         require(_numberOfTickets <= priceStruct.numEntries, "buying more than the maximum tickets");
@@ -426,7 +418,6 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         );
 
         bytes32 hash = keccak256(abi.encode(msg.sender, _raffleId)); // to check if this hash is being used anywhere else other than calculating the max enteries per user
-        console.log("we got the hash");
         // // check there are enough entries left for this particular user
         // require(
         //     claimsData[hash].numEntriesPerUser + priceStruct.numEntries <=
@@ -439,10 +430,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             currentEntriesLength: raffle.entriesLength +
                 priceStruct.numEntries
         });
-        console.log("we got the event entryBought");
         entriesList[_raffleId].push(entryBought);
-        console.log("we pushed the object");
-
         raffle.amountRaised += msg.value; // 6917 gas
         // update the field entriesLength, used in frontend to avoid making extra calls
         raffle.entriesLength =
@@ -464,7 +452,6 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         view
         returns (PriceStructure memory)
     {   
-        console.log("we are trying to fetch the prices");
         return prices[_idRaffle][0];
         // return PriceStructure({id: 0, numEntries: 0, price: 0});
     }
