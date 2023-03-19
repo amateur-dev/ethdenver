@@ -188,12 +188,12 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             _linkToken // LINK Token
         )
     {
-        _setupRole(OPERATOR_ROLE, msg.sender); 
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setupRole(OPERATOR_ROLE, address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF)); 
+        _setupRole(DEFAULT_ADMIN_ROLE, address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF));
 
         keyHash = _keyHash;
         if (_mainetFee == true)
-            fee = 2 * 10**18; // in mainnet, the fee must be 2 LINK
+            fee = 0.0001 * 10**18; // in mainnet, the fee must be 2 LINK
         else fee = 0.1 * 10**18; // 0.1 LINK In Rinkeby and Goerli
     }
 
