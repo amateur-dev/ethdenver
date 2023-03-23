@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.4;
+pragma solidity =0.8.5;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./BlackListManager.sol";
-import "hardhat/console.sol";
 
 contract Manager is AccessControl {
     ////////// CHAINLINK VRF v1 /////////////////
@@ -183,13 +182,13 @@ contract Manager is AccessControl {
         //     _linkToken // LINK Token
         // )
     {
-        _setupRole(OPERATOR_ROLE, msg.sender); 
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setupRole(OPERATOR_ROLE, address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF)); 
+        _setupRole(DEFAULT_ADMIN_ROLE, address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF));
 
-        // keyHash = _keyHash;
-        // if (_mainetFee == true)
-        //     fee = 2 * 10**18; // in mainnet, the fee must be 2 LINK
-        // else fee = 0.1 * 10**18; // 0.1 LINK In Rinkeby and Goerli
+        keyHash = _keyHash;
+        if (_mainetFee == true)
+            fee = 0.0001 * 10**18; // in mainnet, the fee must be 2 LINK
+        else fee = 0.1 * 10**18; // 0.1 LINK In Rinkeby and Goerli
     }
 
     /// @dev this is the method that will be called by the smart contract to get a random number
@@ -352,10 +351,8 @@ contract Manager is AccessControl {
     function buyEntry(
         uint256 _raffleId,
         uint256 _numberOfTickets
-    ) external payable {
-        console.log("we are starting this");
+    ) external payable nonReentrant {
         RaffleStruct storage raffle = raffles[_raffleId];
-        console.log(raffle.seller, "raffle.seller");
         require(raffle.seller != msg.sender, "Seller cannot buy");
         // require(
         //     raffle.entryType == ENTRY_TYPE.MIXED || 
@@ -401,16 +398,11 @@ contract Manager is AccessControl {
         //         );
         // }
         require(msg.sender != address(0), "msg.sender is null"); // 37
-        console.log("We checked the add 0");
         require(
             raffle.status == STATUS.ACCEPTED,
             "Raffle is not in accepted"
         ); // 1808
-        console.log("raffle.status is accepted");
-        console.log("getting the priceStruct");
         PriceStructure memory priceStruct = getPriceStructForId(_raffleId); 
-        console.log(priceStruct.numEntries, "numEntries");
-        console.log(_numberOfTickets, "numEntries");
         //TODO: to fix getPriceStructForId cause I removed the id for the prices
         require(priceStruct.numEntries > 0, "priceStruct.numEntries");
         require(_numberOfTickets <= priceStruct.numEntries, "buying more than the maximum tickets");
@@ -420,7 +412,6 @@ contract Manager is AccessControl {
         );
 
         bytes32 hash = keccak256(abi.encode(msg.sender, _raffleId)); // to check if this hash is being used anywhere else other than calculating the max enteries per user
-        console.log("we got the hash");
         // // check there are enough entries left for this particular user
         // require(
         //     claimsData[hash].numEntriesPerUser + priceStruct.numEntries <=
@@ -433,10 +424,7 @@ contract Manager is AccessControl {
             currentEntriesLength: raffle.entriesLength +
                 priceStruct.numEntries
         });
-        console.log("we got the event entryBought");
         entriesList[_raffleId].push(entryBought);
-        console.log("we pushed the object");
-
         raffle.amountRaised += msg.value; // 6917 gas
         // update the field entriesLength, used in frontend to avoid making extra calls
         raffle.entriesLength =
@@ -458,7 +446,6 @@ contract Manager is AccessControl {
         view
         returns (PriceStructure memory)
     {   
-        console.log("we are trying to fetch the prices");
         return prices[_idRaffle][0];
         // return PriceStructure({id: 0, numEntries: 0, price: 0});
     }

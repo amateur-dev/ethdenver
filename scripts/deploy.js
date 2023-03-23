@@ -7,20 +7,29 @@
 const hre = require("hardhat");
 
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-  const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
-
-  const lockedAmount = hre.ethers.utils.parseEther("1");
-
-  const Lock = await hre.ethers.getContractFactory("Lock");
-  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
-
-  await lock.deployed();
-
-  console.log(
-    `Lock with 1 ETH and unlock timestamp ${unlockTime} deployed to ${lock.address}`
+  const Manager = await hre.ethers.getContractFactory("Manager");
+  console.log("Starting the deployment...");
+  const manager = await Manager.deploy(
+    "0x3d2341ADb2D31f1c5530cDC622016af293177AE0",
+    "0xb0897686c545045aFc77CF20eC7A532E3120E0F1",
+    "0xf86195cf7690c55907b2b611ebb7343a6f649bff128701cc542f0569e2c549da",
+    true
   );
+  console.log("deploying...");
+  console.log(manager.deployTransaction)
+  
+  await manager.deployed();
+  console.log("Manager deployed to:", manager.address);
+
+  await hre.run("verify:verify", {
+    address: manager.address,
+    constructorArguments: [
+      "0x3d2341ADb2D31f1c5530cDC622016af293177AE0",
+      "0xb0897686c545045aFc77CF20eC7A532E3120E0F1",
+      "0xf86195cf7690c55907b2b611ebb7343a6f649bff128701cc542f0569e2c549da",
+      true
+    ],
+  });
 }
 
 // We recommend this pattern to be able to use async/await everywhere
