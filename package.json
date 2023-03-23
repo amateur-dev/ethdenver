@@ -5,7 +5,7 @@
     "@openzeppelin/contracts": "^4.6.0",
     "@openzeppelin/test-helpers": "^0.5.15",
     "@truffle/hdwallet-provider": "^2.0.10",
-    "dotenv": "^16.0.1",
+    "dotenv": "^16.0.3",
     "web3": "^1.7.4"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("@nomiclabs/hardhat-etherscan");
+require('dotenv').config()
 
 
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -16,12 +17,12 @@ module.exports = {
     networks: {
       polygon: {
         url: "https://rpc.ankr.com/polygon",
-        accounts:["INSERT PRIVATE KEY HERE"]
+        accounts:[process.env.PRIVATEKEY]
       }
     },
-    etherscan: {
+    polygon: {
       apiKey: {
-        polygon: "INSERT POLYGONSCAN API KEY HERE",
+        polygon: process.env.POLYGOSCAN_API_KEY,
       },
       customChains: [
         {
