@@ -330,18 +330,18 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         // Check if the raffle is already created
         require(raffle.status == STATUS.CREATED, "Raffle not CREATED");
         // the owner of the NFT must be the current caller
-        IERC721 token = IERC721(raffle.collateralAddress);
-        require(
-            token.ownerOf(raffle.collateralId) == msg.sender,
-            "NFT is not owned by caller"
-        );
+        // IERC721 token = IERC721(raffle.collateralAddress); //@dipesh to uncomment later
+        // require(
+        //     token.ownerOf(raffle.collateralId) == msg.sender,
+        //     "NFT is not owned by caller"
+        // );
 
         raffle.status = STATUS.ACCEPTED;
         // raffle.seller = msg.sender;
 
         // transfer the asset to the contract
         //  IERC721 _asset = IERC721(raffle.collateralAddress);
-        token.transferFrom(msg.sender, address(this), raffle.collateralId); // transfer the token to the contract
+        // token.transferFrom(msg.sender, address(this), raffle.collateralId); // transfer the token to the contract
 
         emit RaffleStarted(_raffleId, msg.sender);
     }
@@ -427,15 +427,14 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
 
         EntriesBought memory entryBought = EntriesBought({
             player: msg.sender,
-            currentEntriesLength: raffle.entriesLength +
-                priceStruct.numEntries
+            currentEntriesLength: _numberOfTickets
         });
         entriesList[_raffleId].push(entryBought);
         raffle.amountRaised += msg.value; // 6917 gas
         // update the field entriesLength, used in frontend to avoid making extra calls
         raffle.entriesLength =
             raffle.entriesLength +
-            priceStruct.numEntries;
+            _numberOfTickets;
         //update claim data
         claimsData[hash].numEntriesPerUser += priceStruct.numEntries; //TODO to confirm this does not have a negative impact 
         claimsData[hash].amountSpentInWeis += msg.value;
@@ -443,7 +442,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         emit EntrySold(
             _raffleId,
             msg.sender,
-            raffle.entriesLength
+            _numberOfTickets
         ); // 2377
     }
 
