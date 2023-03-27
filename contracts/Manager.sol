@@ -330,11 +330,11 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         // Check if the raffle is already created
         require(raffle.status == STATUS.CREATED, "Raffle not CREATED");
         // the owner of the NFT must be the current caller
-        // IERC721 token = IERC721(raffle.collateralAddress); //@dipesh to uncomment later
-        // require(
-        //     token.ownerOf(raffle.collateralId) == msg.sender,
-        //     "NFT is not owned by caller"
-        // );
+        IERC721 token = IERC721(raffle.collateralAddress);
+        require(
+            token.ownerOf(raffle.collateralId) == msg.sender,
+            "NFT is not owned by caller"
+        );
 
         raffle.status = STATUS.ACCEPTED;
         // raffle.seller = msg.sender;
