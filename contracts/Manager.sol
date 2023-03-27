@@ -673,6 +673,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             raffle.amountRaised >= funding.minimumFundsInWeis,
             "Not enough funds raised"
         );
+        require(raffle.expiryDate < block.timestamp, "Raffle not expired yet");
 
         // require(
         //     funding.desiredFundsInWeis <= raffle.amountRaised,
