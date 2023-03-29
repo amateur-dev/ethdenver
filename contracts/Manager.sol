@@ -591,4 +591,59 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase, Ownable {
             raffle.status = STATUS.CLOSING_FAILED;
         }
     }
+
+    // function to manually set the winner of a raffle. Only callable by the owner
+    // this is useful in case Chainlink VRF fails to generate a random number
+    // and the raffle is stuck in CLOSING_REQUESTED status
+    /// @param _raffleId Id of the raffle
+    /// @param _normalizedRandomNumber random number we want to use to set the winner
+    function transferNFTAndFundsEmergency(
+        uint256 _raffleId,
+        uint256 _normalizedRandomNumber
+    ) public nonReentrant onlyOwner {
+        RaffleStruct storage raffle = raffles[_raffleId];
+
+        // Only callable when the raffle is requested to be closed
+        require(
+            raffle.status == STATUS.CLOSING_REQUESTED,
+            "Raffle in wrong status"
+        );
+
+        raffle.randomNumber = _normalizedRandomNumber;
+
+        if (raffle.amountRaised == 0) {
+            raffle.winner = raffle.seller;
+        } else {
+            raffle.winner = getWinnerAddressFromRandom(
+                _raffleId,
+                _normalizedRandomNumber
+            );
+        }
+
+        IERC721 _asset = IERC721(raffle.collateralAddress);
+        _asset.transferFrom(address(this), raffle.winner, raffle.collateralId); // transfer the NFT to the winner
+
+        uint256 amountForPlatform = (raffle.amountRaised *
+            raffle.platformPercentage) / 10000;
+        uint256 amountForSeller = raffle.amountRaised - amountForPlatform;
+
+        // transfer 95% to the seller
+        (bool sent, ) = raffle.seller.call{value: amountForSeller}("");
+        require(sent, "Failed to send Ether");
+
+        // transfer 5% to the platform
+        (bool sent2, ) = destinationWallet.call{value: amountForPlatform}("");
+        require(sent2, "Failed send Eth to MW");
+
+        raffle.status = STATUS.ENDED;
+
+        emit FeeTransferredToPlatform(_raffleId, amountForPlatform);
+
+        emit RaffleEnded(
+            _raffleId,
+            raffle.winner,
+            raffle.amountRaised,
+            _normalizedRandomNumber
+        );
+    }
 }
