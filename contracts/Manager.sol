@@ -6,10 +6,11 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./BlackListManager.sol";
 
-contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
+contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase, Ownable {
     ////////// CHAINLINK VRF v1 /////////////////
     bytes32 internal keyHash; // chainlink
     uint256 internal fee; // fee paid in LINK to chainlink. 0.1 in Rinkeby, 2 in mainnet
@@ -34,6 +35,8 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     mapping(uint256 => RandomResult) public requests;
     // map the requestId created by chainlink with the raffle info passed as param when calling getRandomNumber()
     mapping(bytes32 => RaffleInfo) public chainlinkRaffleInfo;
+    // Add a new mapping to store requestIds for each raffle
+    mapping(uint256 => bytes32) private raffleRequestIds;
 
     /////////////// END CHAINKINK VRF V1 //////////////
 
@@ -89,8 +92,12 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     event SetWinnerTriggered(uint256 indexed raffleId, uint256 amountRaised);
     event StatusChangedInEmergency(uint256 indexed raffleId, uint256 newStatus);
     // Emitted when an entry is cancelled
-    event EntryCancelled(uint256 indexed raffleId, uint256 amountOfEntriesCanceled, address player);
-    
+    event EntryCancelled(
+        uint256 indexed raffleId,
+        uint256 amountOfEntriesCanceled,
+        address player
+    );
+
     /* every raffle has an array of price structure (max size = 5) with the different 
     prices for the different entries bought. The price for 1 entry is different than 
     for 5 entries where there is a discount*/
@@ -129,10 +136,10 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         address seller; // address of the seller of the NFT
         uint256 platformPercentage; // percentage of the funds raised that goes to the platform
         uint256 entriesLength; // to easy frontend, the length of the entries array is saved here
-        uint256 cancellingDate;
-        address[] collectionWhitelist; // addresses of the required nfts. Will be empty if no NFT is required to buy
-        ENTRY_TYPE entryType;
+        // address[] collectionWhitelist; // addresses of the required nfts. Will be empty if no NFT is required to buy
+        // ENTRY_TYPE entryType;
         uint256 expiryTimeStamp;
+        bool chainlinkCallbackReceived;
     }
     // The main structure is an array of raffles
     RaffleStruct[] public raffles;
@@ -156,14 +163,15 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         CANCELLED, // the operator cancels the raffle and transfer the remaining funds after 30 days passes
         CLOSING_REQUESTED, // the operator sets a winner
         ENDED, // the raffle is finished, and NFT and funds were transferred
-        CANCEL_REQUESTED // operator asks to cancel the raffle. Players has 30 days to ask for a refund
+        CANCEL_REQUESTED, // operator asks to cancel the raffle. Players has 30 days to ask for a refund
+        CLOSING_FAILED // the operator failed to set a winner
     }
 
-    enum ENTRY_TYPE {
-        ONLY_DIRECTLY,
-        ONLY_EXTERNAL_CONTRACT,
-        MIXED
-    }
+    // enum ENTRY_TYPE {
+    //     ONLY_DIRECTLY,
+    //     ONLY_EXTERNAL_CONTRACT,
+    //     MIXED
+    // }
 
     // The operator role is operated by a backend application
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR");
@@ -172,7 +180,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
 
     // address of the wallet controlled by the platform that will receive the platform fee
     address payable public destinationWallet =
-        payable(0x52a032cF59eA274f9D745f29b6D514fe95Ba192D);
+        payable(0x520dcCE3c0d35804312c186DB4DB8d9249C4Ee5B);
 
     // contract that contains the black list
     BlackListManager blackListManager;
@@ -188,23 +196,29 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             _linkToken // LINK Token
         )
     {
-        _setupRole(OPERATOR_ROLE, address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF)); 
-        _setupRole(DEFAULT_ADMIN_ROLE, address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF));
+        _setupRole(
+            OPERATOR_ROLE,
+            address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF)
+        );
+        _setupRole(
+            DEFAULT_ADMIN_ROLE,
+            address(0x11E7Fa3Bc863bceD1F1eC85B6EdC9b91FdD581CF)
+        );
 
         keyHash = _keyHash;
         if (_mainetFee == true)
-            fee = 0.0001 * 10**18; // in mainnet, the fee must be 2 LINK
-        else fee = 0.1 * 10**18; // 0.1 LINK In Rinkeby and Goerli
+            fee = 0.0001 * 10 ** 18; // in mainnet, the fee must be 2 LINK
+        else fee = 0.1 * 10 ** 18; // 0.1 LINK In Rinkeby and Goerli
     }
 
     /// @dev this is the method that will be called by the smart contract to get a random number
     /// @param _id Id of the raffle
     /// @param _entriesSize length of the entries array of that raffle
     /// @return requestId Id generated by chainlink
-    function getRandomNumber(uint256 _id, uint256 _entriesSize)
-        internal
-        returns (bytes32 requestId)
-    {
+    function getRandomNumber(
+        uint256 _id,
+        uint256 _entriesSize
+    ) internal returns (bytes32 requestId) {
         require(
             LINK.balanceOf(address(this)) >= fee,
             "Not enough LINK - fill contract with faucet"
@@ -221,12 +235,18 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// member of the MW community, and if true will call transferNFTAndFunds
     /// @param requestId id generated previously (on method getRandomNumber by chainlink)
     /// @param randomness random number (huge) generated by chainlink
-    function fulfillRandomness(bytes32 requestId, uint256 randomness)
-        internal
-        override
-    {
+    function fulfillRandomness(
+        bytes32 requestId,
+        uint256 randomness
+    ) internal override {
         // randomness is the actual random number. Now extract from the aux map the original param id of the call
         RaffleInfo memory raffleInfo = chainlinkRaffleInfo[requestId];
+        raffles[raffleInfo.id].chainlinkCallbackReceived = true;
+
+        // Check if the requestId has already been fulfilled
+        if (raffles[raffleInfo.id].status == STATUS.ENDED) {
+            return;
+        }
         // save the random number on the map with the original id as key
         uint256 normalizedRandomNumber = (randomness % raffleInfo.size) + 1;
 
@@ -247,6 +267,49 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         transferNFTAndFunds(raffleInfo.id, normalizedRandomNumber);
     }
 
+    // Add a new function to check if the raffle is in the CLOSING_FAILED status
+    function canRetryClosing(uint256 _raffleId) public view returns (bool) {
+        RaffleStruct storage raffle = raffles[_raffleId];
+        return raffle.status == STATUS.CLOSING_FAILED;
+    }
+
+    // add a new function to view the current status of the raffle
+    function getRaffleStatus(uint256 _raffleId) public view returns (STATUS) {
+        RaffleStruct storage raffle = raffles[_raffleId];
+        return raffle.status;
+    }
+
+    // add a new function for the owner to pull an NFT from the contract in case of a failed raffle
+    function pullNFT(uint256 _raffleId) public onlyOwner {
+        RaffleStruct storage raffle = raffles[_raffleId];
+        require(raffle.collateralId != 0, "Raffle collateralId is not set");
+        require(
+            raffle.collateralAddress != address(0),
+            "Raffle collateralAddress is not set"
+        );
+        IERC721(raffle.collateralAddress).safeTransferFrom(
+            address(this),
+            owner(),
+            raffle.collateralId
+        );
+    }
+
+    //add a new function for the owner to pull the funds from the contract in case of a failed raffle
+    function pullFunds(uint256 _raffleId) public payable onlyOwner {
+        RaffleStruct storage raffle = raffles[_raffleId];
+        require(
+            raffle.status == STATUS.CLOSING_FAILED,
+            "Raffle is not in CLOSING_FAILED status"
+        );
+        require(raffle.collateralId != 0, "Raffle collateralId is not set");
+        require(
+            raffle.collateralAddress != address(0),
+            "Raffle collateralAddress is not set"
+        );
+
+        payable(owner()).transfer(raffle.amountRaised);
+    }
+
     //////////////////////////////////////////////
 
     // _desiredFundsInWeis this has been removed by Dipesh
@@ -263,7 +326,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @return raffleId
     function createRaffle(
         // uint256 _desiredFundsInWeis, //TODO to check is this restrictive
-        uint256 _maxEntries, 
+        uint256 _maxEntries,
         address _collateralAddress,
         uint256 _collateralId,
         // uint256 _minimumFundsInWeis,  //TODO what is the impact of this
@@ -274,12 +337,12 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         address _raffleCreator, // TODO
         uint256 _expiryTimeStamp // TODO
     ) external returns (uint256) {
-        uint256 _minimumFundsInWeis = 1;  //TODO what is the impact of this
+        uint256 _minimumFundsInWeis = 1; //TODO what is the impact of this
         // uint _maxEntriesPerUser = type(uint256).max;
         require(_collateralAddress != address(0), "NFT is null");
         uint _commissionInBasicPoints = 500;
         // _collectionWhitelist empty
-        address[] memory _collectionWhitelist = new address[](1);
+        // address[] memory _collectionWhitelist = new address[](1);
         // require(_commissionInBasicPoints <= 5000, "commission too high");
 
         RaffleStruct memory raffle = RaffleStruct({
@@ -293,20 +356,20 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             seller: _raffleCreator, // _raffleCreator // TODO: to check the impact of this.  Should not this be the address of the msg.sender?
             platformPercentage: _commissionInBasicPoints,
             entriesLength: 0,
-            cancellingDate: 0,
-            collectionWhitelist: _collectionWhitelist,
-            entryType: ENTRY_TYPE.MIXED,
-            expiryTimeStamp: _expiryTimeStamp
+            // collectionWhitelist: _collectionWhitelist,
+            // entryType: ENTRY_TYPE.MIXED,
+            expiryTimeStamp: _expiryTimeStamp,
+            chainlinkCallbackReceived: false
         });
 
         raffles.push(raffle);
 
         require(_prices.length == 1, "Issue in the prices");
         PriceStructure memory p = PriceStructure({
-                id: _prices[0].id,
-                numEntries: _maxEntries,
-                price: _pricePerTicketInWeis
-            });
+            id: _prices[0].id,
+            numEntries: _maxEntries,
+            price: _pricePerTicketInWeis
+        });
         uint raffleID = raffles.length - 1;
         prices[raffleID][0] = p; //TODO: to check the impact of this line of code
 
@@ -314,16 +377,11 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
             minimumFundsInWeis: _minimumFundsInWeis
         });
 
-        emit RaffleCreated(
-            raffleID,
-            _collateralAddress,
-            _collateralId
-        );
+        emit RaffleCreated(raffleID, _collateralAddress, _collateralId);
 
         stakeNFT(raffleID);
         return raffleID;
     }
-    
 
     function stakeNFT(uint256 _raffleId) internal {
         RaffleStruct storage raffle = raffles[_raffleId];
@@ -341,7 +399,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
 
         // transfer the asset to the contract
         //  IERC721 _asset = IERC721(raffle.collateralAddress);
-        // token.transferFrom(msg.sender, address(this), raffle.collateralId); // transfer the token to the contract
+        token.transferFrom(msg.sender, address(this), raffle.collateralId); // transfer the token to the contract
 
         emit RaffleStarted(_raffleId, msg.sender);
     }
@@ -360,60 +418,17 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     ) external payable nonReentrant {
         RaffleStruct storage raffle = raffles[_raffleId];
         require(raffle.seller != msg.sender, "Seller cannot buy");
-        // require(
-        //     raffle.entryType == ENTRY_TYPE.MIXED || 
-        //     raffle.entryType == ENTRY_TYPE.ONLY_DIRECTLY,
-        //     "Entry type not allowed"
-        // ); 
-        // require(
-        //     blackListManager.isBlackListed(msg.sender) == false,
-        //     "Blacklisted!"
-        // );
-        // if the raffle requires an nft
-        // if (raffle.collectionWhitelist.length > 0) {
-        //     bool hasRequiredCollection = false;
-        //     for (
-        //         uint256 i = 0;
-        //         i < raffle.collectionWhitelist.length;
-        //         i++
-        //     ) {
-        //         if (raffle.collectionWhitelist[i] == _collection) {
-        //             hasRequiredCollection = true;
-        //             break;
-        //         }
-        //     }
-        //     require(
-        //         hasRequiredCollection == true,
-        //         "Not in required collection"
-        //     );
-        //     IERC721 requiredNFT = IERC721(_collection);
-        //     require(
-        //         requiredNFT.ownerOf(_tokenIdUsed) == msg.sender,
-        //         "Not the owner of tokenId"
-        //     );
-        //     bytes32 hashRequiredNFT = keccak256(
-        //         abi.encode(_collection, _raffleId, _tokenIdUsed)
-        //     );
-        //     // check the tokenId has not been using yet in the raffle, to avoid abuse
-        //     if (requiredNFTWallets[hashRequiredNFT] == address(0)) {
-        //         requiredNFTWallets[hashRequiredNFT] = msg.sender;
-        //     } else
-        //         require(
-        //             requiredNFTWallets[hashRequiredNFT] == msg.sender,
-        //             "tokenId used"
-        //         );
-        // }
         require(msg.sender != address(0), "msg.sender is null"); // 37
-        require(
-            raffle.status == STATUS.ACCEPTED,
-            "Raffle is not in accepted"
-        ); // 1808
-        PriceStructure memory priceStruct = getPriceStructForId(_raffleId); 
+        require(raffle.status == STATUS.ACCEPTED, "Raffle is not in accepted"); // 1808
+        PriceStructure memory priceStruct = getPriceStructForId(_raffleId);
         //TODO: to fix getPriceStructForId cause I removed the id for the prices
         require(priceStruct.numEntries > 0, "priceStruct.numEntries");
-        require(_numberOfTickets <= priceStruct.numEntries, "buying more than the maximum tickets");
         require(
-            msg.value == _numberOfTickets * priceStruct.price,  //TODO to confirm we are good over here
+            _numberOfTickets <= priceStruct.numEntries,
+            "buying more than the maximum tickets"
+        );
+        require(
+            msg.value == _numberOfTickets * priceStruct.price, //TODO to confirm we are good over here
             "msg.value must be equal to the price * number of tickets"
         );
 
@@ -432,29 +447,20 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         entriesList[_raffleId].push(entryBought);
         raffle.amountRaised += msg.value; // 6917 gas
         // update the field entriesLength, used in frontend to avoid making extra calls
-        raffle.entriesLength =
-            raffle.entriesLength +
-            _numberOfTickets;
+        raffle.entriesLength = raffle.entriesLength + _numberOfTickets;
         //update claim data
-        claimsData[hash].numEntriesPerUser += priceStruct.numEntries; //TODO to confirm this does not have a negative impact 
+        claimsData[hash].numEntriesPerUser += priceStruct.numEntries; //TODO to confirm this does not have a negative impact
         claimsData[hash].amountSpentInWeis += msg.value;
 
-        emit EntrySold(
-            _raffleId,
-            msg.sender,
-            _numberOfTickets
-        ); // 2377
+        emit EntrySold(_raffleId, msg.sender, _numberOfTickets); // 2377
     }
 
-    function getPriceStructForId(uint256 _idRaffle)
-        internal
-        view
-        returns (PriceStructure memory)
-    {   
+    function getPriceStructForId(
+        uint256 _idRaffle
+    ) internal view returns (PriceStructure memory) {
         return prices[_idRaffle][0];
         // return PriceStructure({id: 0, numEntries: 0, price: 0});
     }
-
 
     // // The operator can add free entries to the raffle
     // /// @param _raffleId Id of the raffle
@@ -555,11 +561,10 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// If no such index exists (i.e. all values in the array are strictly less than element), the array length is returned. Time complexity O(log n).
     /// array is expected to be sorted in ascending order, and to contain no repeated elements.
     /// https://docs.openzeppelin.com/contracts/3.x/api/utils#Arrays-findUpperBound-uint256---uint256-
-    function findUpperBound(EntriesBought[] storage array, uint256 element)
-        internal
-        view
-        returns (uint256)
-    {
+    function findUpperBound(
+        EntriesBought[] storage array,
+        uint256 element
+    ) internal view returns (uint256) {
         if (array.length == 0) {
             return 0;
         }
@@ -624,6 +629,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
         // transfer the amount to the platform
         (bool sent2, ) = destinationWallet.call{value: amountForPlatform}("");
         require(sent2, "Failed send Eth to MW");
+
         emit FeeTransferredToPlatform(_raffleId, amountForPlatform);
 
         emit RaffleEnded(
@@ -660,31 +666,33 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     /// @param _raffleId Id of the raffle
     /// @notice the operator finish the raffle, if the desired funds has been reached
     /// @dev it triggers Chainlink VRF1 consumer, and generates a random number that is normalized and checked that corresponds to a MW player
-
-    function setWinner(uint256 _raffleId)
-        external
-        nonReentrant
-    {
+    function setWinner(uint256 _raffleId) external nonReentrant {
         RaffleStruct storage raffle = raffles[_raffleId];
         FundingStructure storage funding = fundingList[_raffleId];
-    //     // Check if the raffle is already accepted or is called again because early cashout failed
-        require(raffle.status == STATUS.ACCEPTED, "Raffle in wrong status");
+
+        require(
+            raffle.status == STATUS.ACCEPTED ||
+                raffle.status == STATUS.CLOSING_FAILED,
+            "Raffle in wrong status"
+        );
         require(
             raffle.amountRaised >= funding.minimumFundsInWeis,
             "Not enough funds raised"
         );
-        require(raffle.expiryTimeStamp < block.timestamp, "Raffle not expired yet");
+        require(
+            raffle.expiryTimeStamp < block.timestamp,
+            "Raffle not expired yet"
+        );
 
-        // require(
-        //     funding.desiredFundsInWeis <= raffle.amountRaised,
-        //     "Desired funds not raised"
-        // );
-        raffle.status = STATUS.CLOSING_REQUESTED;
-
-    //     // this call trigers the VRF v1 process from Chainlink
-        getRandomNumber(_raffleId, raffle.entriesLength);
-
-        emit SetWinnerTriggered(_raffleId, raffle.amountRaised);
+        // Only update status if the request to Chainlink VRF is successful
+        bytes32 requestId = getRandomNumber(_raffleId, raffle.entriesLength);
+        if (requestId != bytes32(0)) {
+            raffleRequestIds[_raffleId] = requestId;
+            raffle.status = STATUS.CLOSING_REQUESTED;
+            emit SetWinnerTriggered(_raffleId, raffle.amountRaised);
+        } else {
+            raffle.status = STATUS.CLOSING_FAILED;
+        }
     }
 
     // /// @param _newAddress new address of the platform
@@ -915,7 +923,7 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase {
     // }
 
     // /* Requested by Valerio Di Napoli.
-    // @param _player The address of the player    
+    // @param _player The address of the player
     // @param _raffleId id of the raffle
     // @param _colection Address of the required collection, if any
     // @param _tokenIdUsed Id of the token of the required collection the player says he has and want to use in the raffle
