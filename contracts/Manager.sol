@@ -616,7 +616,6 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase, Ownable {
     /// @dev it triggers Chainlink VRF1 consumer, and generates a random number that is normalized to the number of entries
     function setWinner(uint256 _raffleId) external nonReentrant {
         RaffleStruct storage raffle = raffles[_raffleId];
-        FundingStructure storage funding = fundingList[_raffleId];
 
         require(
             raffle.status == STATUS.ACCEPTED ||
@@ -721,5 +720,47 @@ contract Manager is AccessControl, ReentrancyGuard, VRFConsumerBase, Ownable {
             size: raffle.entriesLength
         });
         return result;
+    }
+
+    // The operator can add free entries to the raffle
+    /// @param _raffleId Id of the raffle
+    /// @param _freePlayers array of addresses corresponding to the wallet of the users that won a free entrie
+    /// @dev only operator can make this call. Assigns a single entry per user, except if that user already reached the max limit of entries per user
+    function giveBatchEntriesForFree(
+        uint256 _raffleId,
+        address[] memory _freePlayers
+    ) external nonReentrant onlyRole(OPERATOR_ROLE) {
+        require(
+            raffles[_raffleId].status == STATUS.ACCEPTED,
+            "Raffle is not in accepted"
+        );
+
+        uint256 freePlayersLength = _freePlayers.length;
+        uint256 validPlayersCount = 0;
+
+        for (uint256 i = 0; i < freePlayersLength; i++) {
+            address entry = _freePlayers[i];
+            EntriesBought memory entryBought = EntriesBought({
+                player: entry,
+                currentEntriesLength: 1
+            });
+            entriesList[_raffleId].push(entryBought);
+
+            claimsData[keccak256(abi.encode(entry, _raffleId))]
+                .numEntriesPerUser++; // needed?
+
+            ++validPlayersCount;
+        }
+
+        raffles[_raffleId].entriesLength =
+            raffles[_raffleId].entriesLength +
+            validPlayersCount;
+
+        emit FreeEntry(
+            _raffleId,
+            _freePlayers,
+            freePlayersLength,
+            raffles[_raffleId].entriesLength
+        );
     }
 }
