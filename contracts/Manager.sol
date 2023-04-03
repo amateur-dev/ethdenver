@@ -268,14 +268,13 @@ contract Manager is
             raffle.platformPercentage) / 10000;
         uint256 amountForSeller = raffle.amountRaised - amountForPlatform;
 
-        require(
-            payable(raffle.seller).send(amountForSeller),
-            "Failed to send Ether to seller"
-        );
-        require(
-            payable(destinationWallet).send(amountForPlatform),
-            "Failed to send Ether to platform"
-        );
+        // transfer 95% to the seller
+        (bool sent, ) = raffle.seller.call{value: amountForSeller}("");
+        require(sent, "Failed to send Ether to seller");
+
+        // transfer 5% to the platform
+        (bool sent2, ) = destinationWallet.call{value: amountForPlatform}("");
+        require(sent2, "Failed to send Ether to platform");
 
         raffle.status = STATUS.ENDED;
         raffle.randomNumberAvailable = false;
